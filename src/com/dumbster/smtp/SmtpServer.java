@@ -74,7 +74,11 @@ public class SmtpServer implements Runnable {
         int poolSize = threaded ? MAX_THREADS : 1;
         ExecutorService threadExecutor = Executors.newFixedThreadPool(poolSize);
         while (!isStopped()) {
-            SocketWrapper source = new SocketWrapper(clientSocket());
+			Socket socket = clientSocket();
+			if(null == socket) {
+				continue;
+			}
+			SocketWrapper source = new SocketWrapper(socket);
             ClientSession session = new ClientSession(source, mailStore);
             threadExecutor.execute(session);
         }
@@ -83,7 +87,7 @@ public class SmtpServer implements Runnable {
 
     private Socket clientSocket() throws IOException {
         Socket socket = null;
-        while (socket == null) {
+        while (socket == null && !isStopped()) {
             socket = accept();
         }
         return socket;
