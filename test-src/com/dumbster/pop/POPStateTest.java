@@ -1,6 +1,5 @@
 package com.dumbster.pop;
 
-import com.dumbster.pop.action.*;
 import com.dumbster.smtp.FixedSizeMailStore;
 import com.dumbster.smtp.MailStore;
 import junit.framework.Assert;

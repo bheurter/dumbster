@@ -12,7 +12,7 @@ public class DeleteMessage implements Action {
         try {
             int mi = Integer.parseInt(params.trim());
             if (mi > 0)
-                _messageIndex = Integer.valueOf(mi - 1);
+                _messageIndex = mi - 1;
         } catch (NumberFormatException ignored) {
         }
     }
