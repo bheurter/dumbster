@@ -19,33 +19,36 @@ package com.dumbster.smtp;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+
+import com.dumbster.util.Config;
 
 /**
  * Dummy SMTP server for testing purposes.
  */
 public class SmtpServer implements Runnable {
-    public static final int DEFAULT_SMTP_PORT = 25;
-    private static final int SERVER_SOCKET_TIMEOUT = 5000;
-    private static final int MAX_THREADS = 10;
 
-    private volatile MailStore mailStore = new RollingMailStore();
+    private volatile MailStore mailStore = new NullMailStore();
     private volatile boolean stopped = true;
     private volatile boolean ready = false;
     private volatile boolean threaded = false;
 
     private ServerSocket serverSocket;
     private int port;
+    private ThreadPoolExecutor executor = null;
+    private int threadCount = 1;
 
     SmtpServer(int port) {
         this.port = port;
+        this.threadCount = Config.getConfig().getNumSMTPThreads();
+        executor = new ThreadPoolExecutor(threadCount, threadCount, 5, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<Runnable>());
     }
 
     public boolean isReady() {
         return ready;
     }
 
+    @Override
     public void run() {
         stopped = false;
         try {
@@ -67,16 +70,14 @@ public class SmtpServer implements Runnable {
 
     private void initializeServerSocket() throws Exception {
         serverSocket = new ServerSocket(port);
-        serverSocket.setSoTimeout(SERVER_SOCKET_TIMEOUT);
+        serverSocket.setSoTimeout(Config.SERVER_SOCKET_TIMEOUT);
     }
 
     private void serverLoop() throws IOException {
-        int poolSize = threaded ? MAX_THREADS : 1;
-        ExecutorService threadExecutor = Executors.newFixedThreadPool(poolSize);
         while (!isStopped()) {
             SocketWrapper source = new SocketWrapper(clientSocket());
             ClientSession session = new ClientSession(source, mailStore);
-            threadExecutor.execute(session);
+            executor.execute(session);
         }
         ready = false;
     }
@@ -138,10 +139,23 @@ public class SmtpServer implements Runnable {
      * Toggles if the SMTP server is single or multi-threaded for response to
      * SMTP sessions.
      *
-     * @param threaded
+     * @param threaded whether or not to allow multiple simultaneous connections
      */
     public void setThreaded(boolean threaded) {
-        this.threaded = threaded;
+        /* The problem here is that we might start out as a single thread and then later get told to be multi-threaded.
+         * The solution ought to be something like, "Oh, we're switching state so we need to resize our executor's thread pool."
+         */
+        if (threaded != this.threaded) {
+            // we're changing something
+            if (threaded) {
+                executor.setMaximumPoolSize(threadCount);
+                executor.setCorePoolSize(threadCount);
+            } else {
+                executor.setCorePoolSize(1);
+                executor.setMaximumPoolSize(1);
+            }
+            this.threaded = threaded;
+        }
     }
 
     public void setMailStore(MailStore mailStore) {
