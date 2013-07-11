@@ -16,12 +16,12 @@
  */
 package com.dumbster.smtp;
 
+import com.dumbster.util.Config;
+
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.IOException;
 import java.util.concurrent.*;
-
-import com.dumbster.util.Config;
 
 /**
  * Dummy SMTP server for testing purposes.
@@ -35,20 +35,15 @@ public class SmtpServer implements Runnable {
 
     private ServerSocket serverSocket;
     private int port;
-    private ThreadPoolExecutor executor = null;
-    private int threadCount = 1;
 
     SmtpServer(int port) {
         this.port = port;
-        this.threadCount = Config.getConfig().getNumSMTPThreads();
-        executor = new ThreadPoolExecutor(threadCount, threadCount, 5, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<Runnable>());
     }
 
     public boolean isReady() {
         return ready;
     }
 
-    @Override
     public void run() {
         stopped = false;
         try {
@@ -74,17 +69,23 @@ public class SmtpServer implements Runnable {
     }
 
     private void serverLoop() throws IOException {
+        int poolSize = threaded ? Config.getConfig().getMaxThreads() : 1;
+        ExecutorService threadExecutor = Executors.newFixedThreadPool(poolSize);
         while (!isStopped()) {
-            SocketWrapper source = new SocketWrapper(clientSocket());
+			Socket socket = clientSocket();
+			if(null == socket) {
+				continue;
+			}
+			SocketWrapper source = new SocketWrapper(socket);
             ClientSession session = new ClientSession(source, mailStore);
-            executor.execute(session);
+            threadExecutor.execute(session);
         }
         ready = false;
     }
 
     private Socket clientSocket() throws IOException {
         Socket socket = null;
-        while (socket == null) {
+        while (socket == null && !isStopped()) {
             socket = accept();
         }
         return socket;
@@ -142,20 +143,7 @@ public class SmtpServer implements Runnable {
      * @param threaded whether or not to allow multiple simultaneous connections
      */
     public void setThreaded(boolean threaded) {
-        /* The problem here is that we might start out as a single thread and then later get told to be multi-threaded.
-         * The solution ought to be something like, "Oh, we're switching state so we need to resize our executor's thread pool."
-         */
-        if (threaded != this.threaded) {
-            // we're changing something
-            if (threaded) {
-                executor.setMaximumPoolSize(threadCount);
-                executor.setCorePoolSize(threadCount);
-            } else {
-                executor.setCorePoolSize(1);
-                executor.setMaximumPoolSize(1);
-            }
-            this.threaded = threaded;
-        }
+        this.threaded = threaded;
     }
 
     public void setMailStore(MailStore mailStore) {
