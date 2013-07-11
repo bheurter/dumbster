@@ -28,6 +28,6 @@ public class SmtpServerFactory {
     }
 
     public static SmtpServer startServer() {
-        return startServer(Config.DEFAULT_SMTP_PORT);
+        return startServer(Config.getConfig().getDefaultSmtpPort());
     }
 }

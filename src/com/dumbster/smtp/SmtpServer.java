@@ -70,7 +70,7 @@ public class SmtpServer implements Runnable {
 
     private void initializeServerSocket() throws Exception {
         serverSocket = new ServerSocket(port);
-        serverSocket.setSoTimeout(Config.SERVER_SOCKET_TIMEOUT);
+        serverSocket.setSoTimeout(Config.getConfig().getServerSocketTimeout());
     }
 
     private void serverLoop() throws IOException {
